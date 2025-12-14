@@ -187,6 +187,22 @@ router.post('/payment', validateWebhookSignature, async (req, res) => {
 });
 
 /**
+ * GET /webhook/payment
+ * Test endpoint - browsers use GET, webhooks use POST
+ */
+router.get('/payment', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Webhook endpoint is active and ready to receive POST requests',
+    method: 'GET (for testing)',
+    note: 'Actual payments should use POST method',
+    timestamp: new Date().toISOString(),
+    expectedUrl: 'https://bridge-backend-0yaj.onrender.com/webhook/payment',
+    correctMethod: 'POST'
+  });
+});
+
+/**
  * GET /webhook/test
  * Test endpoint to verify webhook is working
  */
