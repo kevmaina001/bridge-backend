@@ -16,6 +16,26 @@ async function postPaymentToUISP(paymentData) {
     throw new Error('UISP_APP_KEY not configured');
   }
 
+  // Format datetime for UISP (expects format: Y-m-d\TH:i:sO, e.g., 2025-12-14T23:48:29+03:00)
+  const formatUispDateTime = (dateString) => {
+    if (!dateString) {
+      dateString = new Date().toISOString();
+    }
+
+    // Parse the date
+    const date = new Date(dateString);
+
+    // Format as YYYY-MM-DDTHH:mm:ss+03:00 (East Africa Time)
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours() + 3).padStart(2, '0'); // UTC+3 for Kenya
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+03:00`;
+  };
+
   // Prepare payment data for UISP
   const uispPaymentData = {
     clientId: parseInt(paymentData.client_id),
@@ -25,7 +45,7 @@ async function postPaymentToUISP(paymentData) {
     note: paymentData.comment || paymentData.note || `Transaction: ${paymentData.transaction_id}`,
     providerName: "Splynx",
     providerPaymentId: paymentData.transaction_id || paymentData.field_1,
-    providerPaymentTime: paymentData.real_create_datetime || paymentData.created_at || new Date().toISOString(),
+    providerPaymentTime: formatUispDateTime(paymentData.real_create_datetime || paymentData.created_at),
     applyToInvoicesAutomatically: true
   };
 
