@@ -360,4 +360,138 @@ router.get('/sync/logs', async (req, res) => {
   }
 });
 
+// ========== CUSTOMER MAPPING ENDPOINTS ==========
+
+/**
+ * GET /api/mappings
+ * Get all customer ID mappings
+ */
+router.get('/mappings', async (req, res) => {
+  try {
+    const mappings = await dbHelpers.getAllMappings();
+
+    res.json({
+      success: true,
+      data: mappings,
+      count: mappings.length
+    });
+
+  } catch (error) {
+    logger.error('Error fetching mappings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch customer mappings',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/mappings/:splynxCustomerId
+ * Get UISP client ID for a Splynx customer
+ */
+router.get('/mappings/:splynxCustomerId', async (req, res) => {
+  try {
+    const uispClientId = await dbHelpers.getUispClientId(req.params.splynxCustomerId);
+
+    if (!uispClientId) {
+      return res.status(404).json({
+        success: false,
+        error: 'Mapping not found',
+        message: `No UISP client ID found for Splynx customer ${req.params.splynxCustomerId}`
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        splynx_customer_id: req.params.splynxCustomerId,
+        uisp_client_id: uispClientId
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error fetching mapping:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch mapping',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/mappings
+ * Create or update a customer mapping
+ * Body: { splynx_customer_id, uisp_client_id, notes }
+ */
+router.post('/mappings', async (req, res) => {
+  try {
+    const { splynx_customer_id, uisp_client_id, notes } = req.body;
+
+    if (!splynx_customer_id || !uisp_client_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'Both splynx_customer_id and uisp_client_id are required'
+      });
+    }
+
+    await dbHelpers.upsertCustomerMapping(splynx_customer_id, uisp_client_id, notes);
+
+    logger.info(`Customer mapping created/updated: Splynx ${splynx_customer_id} → UISP ${uisp_client_id}`);
+
+    res.json({
+      success: true,
+      message: 'Customer mapping saved successfully',
+      data: {
+        splynx_customer_id,
+        uisp_client_id,
+        notes
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error saving mapping:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save customer mapping',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/mappings/:splynxCustomerId
+ * Delete a customer mapping
+ */
+router.delete('/mappings/:splynxCustomerId', async (req, res) => {
+  try {
+    const changes = await dbHelpers.deleteCustomerMapping(req.params.splynxCustomerId);
+
+    if (changes === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Mapping not found',
+        message: `No mapping found for Splynx customer ${req.params.splynxCustomerId}`
+      });
+    }
+
+    logger.info(`Customer mapping deleted for Splynx customer ${req.params.splynxCustomerId}`);
+
+    res.json({
+      success: true,
+      message: 'Customer mapping deleted successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error deleting mapping:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete customer mapping',
+      message: error.message
+    });
+  }
+});
+
 module.exports = router;

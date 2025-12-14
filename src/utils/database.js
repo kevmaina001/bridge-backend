@@ -97,6 +97,18 @@ function initializeSchema() {
       failed_records INTEGER DEFAULT 0,
       error_message TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS customer_mappings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      splynx_customer_id TEXT UNIQUE NOT NULL,
+      uisp_client_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      notes TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_splynx_customer_id ON customer_mappings(splynx_customer_id);
+    CREATE INDEX IF NOT EXISTS idx_uisp_client_id ON customer_mappings(uisp_client_id);
   `;
 
   db.exec(schema, (err) => {
@@ -104,7 +116,31 @@ function initializeSchema() {
       logger.error('Error creating database schema:', err);
     } else {
       logger.info('Database schema initialized');
+      // Insert default mapping for customer 838 → 1211
+      insertDefaultMappings();
     }
+  });
+}
+
+// Insert default customer mappings
+function insertDefaultMappings() {
+  const defaultMappings = [
+    { splynx_customer_id: '838', uisp_client_id: 1211, notes: 'Initial mapping' }
+  ];
+
+  defaultMappings.forEach(mapping => {
+    db.run(
+      `INSERT OR IGNORE INTO customer_mappings (splynx_customer_id, uisp_client_id, notes)
+       VALUES (?, ?, ?)`,
+      [mapping.splynx_customer_id, mapping.uisp_client_id, mapping.notes],
+      (err) => {
+        if (err) {
+          logger.error('Error inserting default mapping:', err);
+        } else {
+          logger.info(`Default mapping created: Splynx ${mapping.splynx_customer_id} → UISP ${mapping.uisp_client_id}`);
+        }
+      }
+    );
   });
 }
 
@@ -510,6 +546,71 @@ const dbHelpers = {
           reject(err);
         } else {
           resolve(rows);
+        }
+      });
+    });
+  },
+
+  // ========== CUSTOMER MAPPING OPERATIONS ==========
+
+  // Get UISP client ID from Splynx customer ID
+  getUispClientId(splynxCustomerId) {
+    return new Promise((resolve, reject) => {
+      const query = 'SELECT uisp_client_id FROM customer_mappings WHERE splynx_customer_id = ?';
+      db.get(query, [splynxCustomerId.toString()], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row ? row.uisp_client_id : null);
+        }
+      });
+    });
+  },
+
+  // Add or update customer mapping
+  upsertCustomerMapping(splynxCustomerId, uispClientId, notes = null) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO customer_mappings (splynx_customer_id, uisp_client_id, notes)
+        VALUES (?, ?, ?)
+        ON CONFLICT(splynx_customer_id) DO UPDATE SET
+          uisp_client_id = excluded.uisp_client_id,
+          updated_at = CURRENT_TIMESTAMP,
+          notes = excluded.notes
+      `;
+      db.run(query, [splynxCustomerId.toString(), uispClientId, notes], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.lastID);
+        }
+      });
+    });
+  },
+
+  // Get all customer mappings
+  getAllMappings() {
+    return new Promise((resolve, reject) => {
+      const query = 'SELECT * FROM customer_mappings ORDER BY created_at DESC';
+      db.all(query, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  },
+
+  // Delete customer mapping
+  deleteCustomerMapping(splynxCustomerId) {
+    return new Promise((resolve, reject) => {
+      const query = 'DELETE FROM customer_mappings WHERE splynx_customer_id = ?';
+      db.run(query, [splynxCustomerId.toString()], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.changes);
         }
       });
     });

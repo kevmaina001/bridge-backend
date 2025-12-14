@@ -47,9 +47,33 @@ router.post('/payment', validateWebhookSignature, async (req, res) => {
     }
 
     // Map Splynx field names to our expected field names
-    if (paymentData.customer_id && !paymentData.client_id) {
-      paymentData.client_id = paymentData.customer_id;
+    const splynxCustomerId = paymentData.customer_id || paymentData.client_id;
+
+    if (!splynxCustomerId) {
+      logger.error('No customer_id or client_id found in webhook payload');
+      return res.status(400).json({
+        error: 'Missing customer identification',
+        message: 'Webhook must include customer_id or client_id'
+      });
     }
+
+    // Look up UISP client ID from mapping table
+    const uispClientId = await dbHelpers.getUispClientId(splynxCustomerId);
+
+    if (!uispClientId) {
+      logger.error(`No UISP client ID mapping found for Splynx customer ${splynxCustomerId}`);
+      return res.status(400).json({
+        error: 'Customer mapping not found',
+        message: `Splynx customer ${splynxCustomerId} is not mapped to a UISP client. Please add mapping first.`,
+        splynxCustomerId: splynxCustomerId
+      });
+    }
+
+    logger.info(`Mapped Splynx customer ${splynxCustomerId} to UISP client ${uispClientId}`);
+
+    // Use the mapped UISP client ID
+    paymentData.client_id = uispClientId;
+    paymentData.splynx_customer_id = splynxCustomerId;
 
     // Validate required fields
     const requiredFields = ['client_id', 'amount'];
