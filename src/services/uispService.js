@@ -19,11 +19,14 @@ async function postPaymentToUISP(paymentData) {
   // Prepare payment data for UISP
   const uispPaymentData = {
     clientId: parseInt(paymentData.client_id),
+    methodId: process.env.UISP_DEFAULT_PAYMENT_METHOD_ID || "ccff6158-de2e-45a2-af01-b973cab5cb5f", // M-Pesa method ID
     amount: parseFloat(paymentData.amount),
     currencyCode: paymentData.currency_code || 'KES',
-    method: paymentData.payment_method || paymentData.payment_type || 'cash',
-    note: `Payment via ${paymentData.payment_type || 'Splynx'} - Transaction: ${paymentData.transaction_id}`,
-    createdDate: paymentData.created_at || new Date().toISOString()
+    note: paymentData.comment || paymentData.note || `Transaction: ${paymentData.transaction_id}`,
+    providerName: "Splynx",
+    providerPaymentId: paymentData.transaction_id || paymentData.field_1,
+    providerPaymentTime: paymentData.real_create_datetime || paymentData.created_at || new Date().toISOString(),
+    applyToInvoicesAutomatically: true
   };
 
   const headers = {
