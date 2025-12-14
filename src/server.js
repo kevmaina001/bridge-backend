@@ -43,6 +43,7 @@ app.get('/', (req, res) => {
     message: 'Splynx-UISP Payment Bridge API',
     version: '1.0.0',
     status: 'running',
+    deployed: true,
     endpoints: {
       webhook: '/webhook/payment',
       api: '/api',
