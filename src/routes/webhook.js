@@ -46,6 +46,11 @@ router.post('/payment', validateWebhookSignature, async (req, res) => {
       });
     }
 
+    // Map Splynx field names to our expected field names
+    if (paymentData.customer_id && !paymentData.client_id) {
+      paymentData.client_id = paymentData.customer_id;
+    }
+
     // Validate required fields
     const requiredFields = ['client_id', 'amount'];
     const missingFields = requiredFields.filter(field => !paymentData[field]);
